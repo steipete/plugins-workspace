@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.4.1]
+
+- [`c8c373b4`](https://github.com/tauri-apps/plugins-workspace/commit/c8c373b48bbf06b57c481dad4cf0a68638c68478) Fixed broken mobile APIs:
+    
+    - `channels()` invoked the `listChannels` command, which the `allow-list-channels` permission does not match; it now invokes `list_channels`.
+    - Unregistering an `onNotificationReceived` or `onAction` listener invokes the `remove_listener` command, which had no permission. It is now declared and part of the `default` permission set (`allow-remove-listener`).
+    - `cancelAll()` was rejected on Android and iOS, which required the list of notifications to cancel. It now cancels every pending notification.
+    - `active()` resolved with `{ values: [...] }` instead of an array on Android.
+- [`684feb25`](https://github.com/tauri-apps/plugins-workspace/commit/684feb2510f468f002c57f7bdebf675cf5c1b1d9) ([#3617](https://github.com/tauri-apps/plugins-workspace/pull/3617)) Fixed `isPermissionGranted()` always resolving to `false` on Windows. The initialization script short-circuited the permission check to avoid invoking the backend, but read the permission back before it had been set, so it settled on `denied` instead of `granted`.
+- [`ae3c808e`](https://github.com/tauri-apps/plugins-workspace/commit/ae3c808eb60086f32b1d67bb8ccc525b95333e77) ([#3602](https://github.com/tauri-apps/plugins-workspace/pull/3602)) The plugin's global API script (used with `app.withGlobalTauri`) now resolves the core API from `window.__TAURI__` instead of bundling its own copy of `@tauri-apps/api`. Values created with the core API are now accepted by plugin APIs in global mode (e.g. an `Image` from `window.__TAURI__.image` passed to `clipboardManager.writeImage`, which previously failed the `instanceof` check against the plugin's private copy), and the script is considerably smaller.
+- [`a87a3c7d`](https://github.com/tauri-apps/plugins-workspace/commit/a87a3c7d4491bf25589a0b24c285fcd5df3d6337) Update documentation.
+
 ## [2.4.0]
 
 - [`db9c5998`](https://github.com/tauri-apps/plugins-workspace/commit/db9c5998feff9384f9cbbefcbe0d45937c00a1fc) ([#3531](https://github.com/tauri-apps/plugins-workspace/pull/3531) by [@Legend-Master](https://github.com/tauri-apps/plugins-workspace/../../Legend-Master)) Fix missing `consumer-rules.pro` on Gradle v9.
