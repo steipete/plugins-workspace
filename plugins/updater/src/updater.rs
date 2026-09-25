@@ -330,7 +330,7 @@ impl UpdaterBuilder {
         self
     }
 
-    /// Function to run before we run the installer and exit the app through `std::process::exit(0)` on Windows
+    /// Function to run after the installer launches successfully and before exiting the app on Windows.
     #[cfg_attr(not(windows), allow(unused))]
     pub fn on_before_exit<F: Fn() + Send + Sync + 'static>(mut self, f: F) -> Self {
         #[cfg(windows)]
@@ -840,11 +840,6 @@ impl Update {
 
         let updater_type = self.extract(bytes)?;
 
-        if let Some(on_before_exit) = self.context.on_before_exit.as_ref() {
-            log::debug!("running on_before_exit hook");
-            on_before_exit();
-        }
-
         let file = match &updater_type {
             WindowsUpdaterType::Nsis { path, .. } => path.as_os_str().to_os_string(),
             WindowsUpdaterType::Msi { .. } => std::env::var("SYSTEMROOT").as_ref().map_or_else(
@@ -871,6 +866,11 @@ impl Update {
         };
         if result as isize <= 32 {
             return Err(crate::Error::Io(std::io::Error::last_os_error()));
+        }
+
+        if let Some(on_before_exit) = self.context.on_before_exit.as_ref() {
+            log::debug!("running on_before_exit hook");
+            on_before_exit();
         }
 
         std::process::exit(0);
