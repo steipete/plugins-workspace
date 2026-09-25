@@ -46,8 +46,16 @@ jobs:
           $runner = Join-Path $env:GITHUB_WORKSPACE 'proof/proof/windows-updater-install/run-proof.ps1'
           $evidence = Join-Path $env:RUNNER_TEMP 'windows-updater-install-evidence'
           $target = Join-Path $env:RUNNER_TEMP 'windows-updater-install-target'
-          & $runner -SourceRoot (Join-Path $env:GITHUB_WORKSPACE 'baseline') -Expectation baseline -EvidenceDir (Join-Path $evidence 'baseline') -CargoTargetDir $target
-          & $runner -SourceRoot (Join-Path $env:GITHUB_WORKSPACE 'candidate') -Expectation candidate -EvidenceDir (Join-Path $evidence 'candidate') -CargoTargetDir $target
+          $failures = @()
+          foreach ($revision in @('baseline', 'candidate')) {
+            try {
+              & $runner -SourceRoot (Join-Path $env:GITHUB_WORKSPACE $revision) -Expectation $revision -EvidenceDir (Join-Path $evidence $revision) -CargoTargetDir $target
+            } catch {
+              $failures += "${revision}: $_"
+              Write-Host "${revision} proof failed: $_"
+            }
+          }
+          if ($failures.Count -ne 0) { throw ($failures -join "`n") }
       - name: Upload synthetic native evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -81,7 +89,10 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $repo = Join-Path $env:GITHUB_WORKSPACE 'openclaw'
           $patch = Join-Path $env:GITHUB_WORKSPACE 'proof/proof/windows-updater-install/openclaw-candidate.patch'
+          $evidence = Join-Path $env:RUNNER_TEMP 'openclaw-windows-updater-evidence'
+          New-Item -ItemType Directory -Path $evidence | Out-Null
           $hash = (Get-FileHash -LiteralPath $patch -Algorithm SHA256).Hash.ToLowerInvariant()
+          @{ patchSha256 = $hash } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $evidence 'binding.json')
           if ($hash -cne '661c64ae1ae012d523d0d4908cea52594c5af769807560933d07dcae265e58ae') {
             throw 'Prospective OpenClaw patch changed.'
           }
@@ -107,7 +118,7 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $false
           $repo = Join-Path $env:GITHUB_WORKSPACE 'openclaw'
           $evidence = Join-Path $env:RUNNER_TEMP 'openclaw-windows-updater-evidence'
-          New-Item -ItemType Directory -Path $evidence | Out-Null
+          if (-not (Test-Path -LiteralPath $evidence -PathType Container)) { throw 'Missing verified input evidence directory.' }
           $env:CARGO_INCREMENTAL = '0'
           $env:CARGO_TERM_COLOR = 'never'
           & cargo +1.98.1 test --locked --manifest-path (Join-Path $repo 'apps/linux/src-tauri/Cargo.toml') updater::tests 2>&1 |

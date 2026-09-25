@@ -97,6 +97,17 @@ fn exercise(mode: &str) {
         Some(release_and_join_installer(root, &started, &release))
     };
     let child_result = wait_child(&mut child);
+    for receipt in [
+        "checked.json",
+        "returned.json",
+        "cleanup.json",
+        "installer.json",
+    ] {
+        let source = root.join(receipt);
+        if source.exists() {
+            fs::copy(&source, case_root.join(receipt)).expect("preserve native proof receipt");
+        }
+    }
     let status = child_result.expect("updater child did not finish");
     let checked = read_json(&root.join("checked.json"));
     assert_eq!(checked["version"], "99.0.0");
@@ -128,14 +139,16 @@ fn exercise(mode: &str) {
         assert!(!root.join("cleanup.json").exists());
         returned
     } else {
+        let return_details = fs::read_to_string(root.join("returned.json"))
+            .unwrap_or_else(|error| format!("no return receipt: {error}"));
         assert_eq!(
             status.code(),
             Some(0),
-            "successful install must use process::exit(0)"
+            "successful install must use process::exit(0); {return_details}"
         );
         assert!(
             !root.join("returned.json").exists(),
-            "successful Windows install returned"
+            "successful Windows install returned: {return_details}"
         );
         let installer = installer_result
             .unwrap()

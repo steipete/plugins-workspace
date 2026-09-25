@@ -39,9 +39,16 @@ $env:UPDATER_INSTALL_PROOF_EVIDENCE = $EvidenceDir
 $cargoExit = $LASTEXITCODE
 if ((Get-FileHash -LiteralPath $lock -Algorithm SHA256).Hash -cne $lockHash) { throw 'Proof lockfile changed.' }
 $afterSourceSha = (& git -C $SourceRoot rev-parse HEAD).Trim()
-if ($LASTEXITCODE -ne 0 -or $afterSourceSha -cne $sourceSha) { throw 'Updater source changed during proof.' }
-$afterSourceChanges = & git -C $SourceRoot status --porcelain
-if ($LASTEXITCODE -ne 0 -or $afterSourceChanges) { throw 'Updater source changed during proof.' }
+$sourceHeadExit = $LASTEXITCODE
+$afterSourceChanges = & git -C $SourceRoot status --porcelain 2>&1
+$sourceStatusExit = $LASTEXITCODE
+$afterSourceChanges | Set-Content -LiteralPath (Join-Path $EvidenceDir 'source-status-after.txt')
+& git -C $SourceRoot diff --no-ext-diff --binary HEAD -- 2>&1 |
+  Set-Content -LiteralPath (Join-Path $EvidenceDir 'source-diff-after.patch')
+$sourceDiffExit = $LASTEXITCODE
+if ($sourceHeadExit -ne 0 -or $afterSourceSha -cne $sourceSha) { throw 'Updater source changed during proof.' }
+if ($sourceStatusExit -ne 0 -or $afterSourceChanges) { throw 'Updater source changed during proof.' }
+if ($sourceDiffExit -ne 0) { throw 'Could not capture updater source diff.' }
 $failure = Get-Content -LiteralPath (Join-Path $EvidenceDir 'failed-msi-launch/outcome.json') -Raw | ConvertFrom-Json
 $nsis = Get-Content -LiteralPath (Join-Path $EvidenceDir 'success-exe/outcome.json') -Raw | ConvertFrom-Json
 $msi = Get-Content -LiteralPath (Join-Path $EvidenceDir 'success-msi/outcome.json') -Raw | ConvertFrom-Json
