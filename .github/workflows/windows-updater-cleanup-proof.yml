@@ -1,0 +1,132 @@
+name: Windows updater cleanup proof
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/windows-updater-cleanup-proof
+
+permissions:
+  contents: read
+
+jobs:
+  install-boundary:
+    runs-on: windows-2025
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout proof harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: proof
+          persist-credentials: false
+      - name: Checkout exact baseline
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: steipete/plugins-workspace
+          ref: 6aa2854f314481a459be1189b02c65a2450789ab
+          path: baseline
+          persist-credentials: false
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: steipete/plugins-workspace
+          ref: 63e8185eb184cf0af6b665f631e2314c7b14d9c6
+          path: candidate
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal --target x86_64-pc-windows-msvc
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rustc +1.98.1 --version --verbose
+      - name: Reproduce baseline and prove candidate
+        run: |
+          $runner = Join-Path $env:GITHUB_WORKSPACE 'proof/proof/windows-updater-install/run-proof.ps1'
+          $evidence = Join-Path $env:RUNNER_TEMP 'windows-updater-install-evidence'
+          $target = Join-Path $env:RUNNER_TEMP 'windows-updater-install-target'
+          & $runner -SourceRoot (Join-Path $env:GITHUB_WORKSPACE 'baseline') -Expectation baseline -EvidenceDir (Join-Path $evidence 'baseline') -CargoTargetDir $target
+          & $runner -SourceRoot (Join-Path $env:GITHUB_WORKSPACE 'candidate') -Expectation candidate -EvidenceDir (Join-Path $evidence 'candidate') -CargoTargetDir $target
+      - name: Upload synthetic native evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: windows-updater-install-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/windows-updater-install-evidence
+          if-no-files-found: error
+          retention-days: 7
+
+  openclaw-companion:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout proof input
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: proof
+          persist-credentials: false
+      - name: Checkout exact OpenClaw base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: openclaw/openclaw
+          ref: 8416a588dc2a4f006b509df1cba437ffafd41cc8
+          path: openclaw
+          persist-credentials: false
+      - name: Bind prospective OpenClaw tree
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $repo = Join-Path $env:GITHUB_WORKSPACE 'openclaw'
+          $patch = Join-Path $env:GITHUB_WORKSPACE 'proof/proof/windows-updater-install/openclaw-candidate.patch'
+          $hash = (Get-FileHash -LiteralPath $patch -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -cne '661c64ae1ae012d523d0d4908cea52594c5af769807560933d07dcae265e58ae') {
+            throw 'Prospective OpenClaw patch changed.'
+          }
+          $base = (& git -C $repo rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $base -cne '8416a588dc2a4f006b509df1cba437ffafd41cc8') {
+            throw 'Unexpected OpenClaw base.'
+          }
+          & git -C $repo apply --index --unidiff-zero $patch
+          if ($LASTEXITCODE -ne 0) { throw 'Could not apply prospective OpenClaw patch.' }
+          $tree = (& git -C $repo write-tree).Trim()
+          if ($LASTEXITCODE -ne 0 -or $tree -cne 'b0696779b924dfa4bac2b34c4da5e29c2307fb3b') {
+            throw 'Prospective OpenClaw tree does not match the reviewed candidate.'
+          }
+          Write-Host "Verified OpenClaw base=$base tree=$tree patch_sha256=$hash"
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal --target x86_64-pc-windows-msvc
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rustc +1.98.1 --version --verbose
+      - name: Test locked Windows companion updater
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
+          $repo = Join-Path $env:GITHUB_WORKSPACE 'openclaw'
+          $evidence = Join-Path $env:RUNNER_TEMP 'openclaw-windows-updater-evidence'
+          New-Item -ItemType Directory -Path $evidence | Out-Null
+          $env:CARGO_INCREMENTAL = '0'
+          $env:CARGO_TERM_COLOR = 'never'
+          & cargo +1.98.1 test --locked --manifest-path (Join-Path $repo 'apps/linux/src-tauri/Cargo.toml') updater::tests 2>&1 |
+            Tee-Object -FilePath (Join-Path $evidence 'cargo.log')
+          $cargoExit = $LASTEXITCODE
+          if ($cargoExit -ne 0) { exit $cargoExit }
+          & git -C $repo diff --exit-code
+          if ($LASTEXITCODE -ne 0) { throw 'OpenClaw source changed during proof.' }
+          $tree = (& git -C $repo write-tree).Trim()
+          if ($LASTEXITCODE -ne 0 -or $tree -cne 'b0696779b924dfa4bac2b34c4da5e29c2307fb3b') {
+            throw 'OpenClaw staged source changed during proof.'
+          }
+          @{ tree = $tree; cargoExit = $cargoExit; platform = [Environment]::OSVersion.VersionString } |
+            ConvertTo-Json | Set-Content -LiteralPath (Join-Path $evidence 'summary.json')
+      - name: Upload companion evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: openclaw-windows-updater-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/openclaw-windows-updater-evidence
+          if-no-files-found: error
+          retention-days: 7

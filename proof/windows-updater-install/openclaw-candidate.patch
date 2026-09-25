@@ -1,0 +1,110 @@
+diff --git a/apps/linux/README.md b/apps/linux/README.md
+index 773d523b4de8..93af8e87c526 100644
+--- a/apps/linux/README.md
++++ b/apps/linux/README.md
+@@ -360,0 +361,2 @@ The companion checks the latest GitHub release shortly after launch and from **C
++If the Windows installer cannot launch, the companion stays open, reports the error, and keeps the downloaded update available for another **Restart to update** attempt.
++
+diff --git a/apps/linux/src-tauri/Cargo.lock b/apps/linux/src-tauri/Cargo.lock
+index cfd1e54caf42..9bd5bbcfe9e6 100644
+--- a/apps/linux/src-tauri/Cargo.lock
++++ b/apps/linux/src-tauri/Cargo.lock
+@@ -630,0 +631,10 @@ dependencies = [
++[[package]]
++name = "core-foundation"
++version = "0.9.4"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "91e195e091a93c46f7102ec7818a2aa394e1e1771c3ab4825963fa03e45afb8f"
++dependencies = [
++ "core-foundation-sys",
++ "libc",
++]
++
+@@ -654 +664 @@ dependencies = [
+- "core-foundation",
++ "core-foundation 0.10.1",
+@@ -667 +677 @@ dependencies = [
+- "core-foundation",
++ "core-foundation 0.10.1",
+@@ -1002 +1012 @@ dependencies = [
+- "windows-sys 0.59.0",
++ "windows-sys 0.61.2",
+@@ -1230 +1240 @@ dependencies = [
+- "windows-sys 0.52.0",
++ "windows-sys 0.61.2",
+@@ -1942,0 +1953 @@ dependencies = [
++ "system-configuration",
+@@ -1945,0 +1957 @@ dependencies = [
++ "windows-registry",
+@@ -2626 +2638 @@ dependencies = [
+- "windows-sys 0.60.2",
++ "windows-sys 0.61.2",
+@@ -3702 +3714 @@ dependencies = [
+- "windows-sys 0.52.0",
++ "windows-sys 0.61.2",
+@@ -3746 +3758 @@ dependencies = [
+- "core-foundation",
++ "core-foundation 0.10.1",
+@@ -3758 +3770 @@ dependencies = [
+- "windows-sys 0.52.0",
++ "windows-sys 0.61.2",
+@@ -3885 +3897 @@ dependencies = [
+- "core-foundation",
++ "core-foundation 0.10.1",
+@@ -4202 +4214 @@ dependencies = [
+- "windows-sys 0.60.2",
++ "windows-sys 0.61.2",
+@@ -4414,0 +4427,21 @@ dependencies = [
++[[package]]
++name = "system-configuration"
++version = "0.7.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "a13f3d0daba03132c0aa9767f98351b3488edc2c100cda2d2ec2b04f3d8d3c8b"
++dependencies = [
++ "bitflags 2.13.2",
++ "core-foundation 0.9.4",
++ "system-configuration-sys",
++]
++
++[[package]]
++name = "system-configuration-sys"
++version = "0.6.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "8e1d1b10ced5ca923a1fcb8d03e96b8d3268065d724548c0211415ff6ac6bac4"
++dependencies = [
++ "core-foundation-sys",
++ "libc",
++]
++
+@@ -4436 +4469 @@ dependencies = [
+- "core-foundation",
++ "core-foundation 0.10.1",
+@@ -4793,3 +4826,2 @@ name = "tauri-plugin-updater"
+-version = "2.10.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "806d9dac662c2e4594ff03c647a552f2c9bd544e7d0f683ec58f872f952ce4af"
++version = "2.11.0"
++source = "git+https://github.com/steipete/plugins-workspace.git?rev=63e8185eb184cf0af6b665f631e2314c7b14d9c6#63e8185eb184cf0af6b665f631e2314c7b14d9c6"
+@@ -4961 +4993 @@ dependencies = [
+- "windows-sys 0.52.0",
++ "windows-sys 0.61.2",
+@@ -5350 +5382 @@ dependencies = [
+- "windows-sys 0.60.2",
++ "windows-sys 0.61.2",
+@@ -5403 +5435 @@ dependencies = [
+- "windows-sys 0.60.2",
++ "windows-sys 0.61.2",
+@@ -5775 +5807 @@ dependencies = [
+- "windows-sys 0.52.0",
++ "windows-sys 0.61.2",
+diff --git a/apps/linux/src-tauri/Cargo.toml b/apps/linux/src-tauri/Cargo.toml
+index 557359bc5508..4638149f7e4f 100644
+--- a/apps/linux/src-tauri/Cargo.toml
++++ b/apps/linux/src-tauri/Cargo.toml
+@@ -44,3 +44,3 @@ tauri-plugin-single-instance = { version = "2.4.4", features = ["deep-link"] }
+-# 2.11.0 returns Windows installer errors after Tauri has torn down the UI.
+-# Lift this pin once cleanup runs only after a successful installer launch.
+-tauri-plugin-updater = "=2.10.1"
++# Defer Windows cleanup until the installer launches successfully.
++# Return to crates.io once an eligible release includes this fix.
++tauri-plugin-updater = { version = "=2.11.0", git = "https://github.com/steipete/plugins-workspace.git", rev = "63e8185eb184cf0af6b665f631e2314c7b14d9c6" }
