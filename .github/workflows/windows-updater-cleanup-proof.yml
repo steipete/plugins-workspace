@@ -17,6 +17,8 @@ jobs:
       run:
         shell: pwsh
     steps:
+      - name: Preserve checked-out source bytes
+        run: git config --global core.autocrlf false
       - name: Checkout proof harness
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

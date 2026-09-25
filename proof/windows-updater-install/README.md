@@ -8,7 +8,7 @@ pinned to candidate `63e8185eb184cf0af6b665f631e2314c7b14d9c6`, not the proof co
 
 The test uses public `UpdaterExt` → `updater_builder` → `check` → `Update::install`.
 A loopback server supplies synthetic update metadata. No download, signing keys,
-WinAPI mocks, production seams, real installer, elevation, or Gateway is involved.
+WinAPI mocks, production seams, installable package, or Gateway is involved.
 Tauri's `MockRuntime` avoids a real webview while retaining its actual resource table
 and `cleanup_before_exit` implementation.
 
@@ -17,14 +17,23 @@ with only the disposable child process's `SYSTEMROOT` directed to a missing fixt
 directory. Actual `ShellExecuteW` must fail and return an I/O error. Baseline cleanup
 destroys an owned resource before that return; the candidate must keep it alive.
 
-The success cases launch this package's benign PE executable through the NSIS and
-MSI branches. It has an `asInvoker` manifest, records its real PID/arguments, and
-uses named Windows events to coordinate a bounded native-process join. Each success
-must invoke the real cleanup exactly once and exit with code 0 without returning
-from install. This proves installer launch, not completion of a genuine MSI/NSIS
-package installation. Cases run concurrently with separate subprocesses, directories,
-and event names. Installer release and joining precede receipt assertions; runtime
-errors also signal release and attempt to join any helper whose PID was recovered.
+The NSIS success case launches this package's benign PE executable. It has an
+`asInvoker` manifest, records its real PID/arguments, and uses named Windows events
+to coordinate a bounded native-process join. The helper must receive `/UPDATE`.
+Release and joining precede receipt assertions; runtime errors also signal release
+and attempt to join any helper whose PID was recovered.
+
+The MSI success case launches the system `msiexec` in quiet mode with the original
+`SYSTEMROOT` and no proof-only arguments. Its entire payload is an eight-byte format
+marker, so there is no installable MSI package. This case covers native launcher
+acceptance only; it does not prove completed MSI installation, record a helper PID,
+or join the native launcher. The disposable runner lifecycle owns any native
+launcher cleanup.
+
+Both success cases must invoke real application cleanup exactly once, drop its
+resource, and exit with code 0 without returning from `Update::install`. Cases run
+concurrently with separate subprocesses, directories, and event names. No completed
+MSI or NSIS package installation is claimed.
 
 The PowerShell runner binds the original and patched SHA, requires a fresh evidence
 directory and unchanged source/lockfile, and accepts baseline failure only when the

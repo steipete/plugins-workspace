@@ -106,11 +106,16 @@ fn run_app(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         .updater_builder()
         .endpoints(vec![endpoint.parse()?])?
         .no_proxy()
-        .timeout(Duration::from_secs(10))
-        .installer_args([
+        .timeout(Duration::from_secs(10));
+    let updater = if mode == "success-msi" {
+        updater
+    } else {
+        updater.installer_args([
             format!("--proof-root=\"{}\"", root.display()),
             format!("--proof-event-prefix={prefix}"),
         ])
+    };
+    let updater = updater
         .on_before_exit(move || {
             let count = hook_counter.fetch_add(1, Ordering::SeqCst) + 1;
             app_handle.cleanup_before_exit();
@@ -135,16 +140,11 @@ fn run_app(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let bytes = if mode == "success-exe" {
         fs::read(std::env::current_exe()?)?
     } else {
-        let system_root = root.join("synthetic-system-root");
-        if mode == "success-msi" {
-            fs::create_dir_all(system_root.join("System32"))?;
-            fs::copy(
-                std::env::current_exe()?,
-                system_root.join("System32/msiexec.exe"),
-            )?;
+        if mode == "failed-msi-launch" {
+            // Only the failure child changes SYSTEMROOT; this fixture path does not exist.
+            std::env::set_var("SYSTEMROOT", root.join("synthetic-system-root"));
         }
-        // Only this disposable child changes SYSTEMROOT; the failure path does not exist.
-        std::env::set_var("SYSTEMROOT", system_root);
+        // The real msiexec positive control receives a marker, not an installable package.
         MSI_MAGIC.to_vec()
     };
     let result = update.install(bytes);
@@ -169,7 +169,7 @@ fn run_app(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let result = if args.iter().any(|arg| arg == "/UPDATE" || arg == "/i") {
+    let result = if args.iter().any(|arg| arg == "/UPDATE") {
         installer(&args)
     } else if args.first().map(String::as_str) == Some("--probe-app") && args.len() == 4 {
         run_app(&args)

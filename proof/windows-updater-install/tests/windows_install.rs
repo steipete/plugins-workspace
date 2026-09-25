@@ -91,10 +91,10 @@ fn exercise(mode: &str) {
         .stderr(fs::File::create(case_root.join("stderr.log")).unwrap())
         .spawn()
         .unwrap();
-    let installer_result = if mode == "failed-msi-launch" {
-        None
-    } else {
+    let installer_result = if mode == "success-exe" {
         Some(release_and_join_installer(root, &started, &release))
+    } else {
+        None
     };
     let child_result = wait_child(&mut child);
     for receipt in [
@@ -150,20 +150,19 @@ fn exercise(mode: &str) {
             !root.join("returned.json").exists(),
             "successful Windows install returned: {return_details}"
         );
-        let installer = installer_result
-            .unwrap()
-            .expect("real ShellExecuteW installer did not start and finish");
         let cleanup = read_json(&root.join("cleanup.json"));
         assert_eq!(cleanup["hookCalls"], 1);
         assert_eq!(cleanup["resourceDropped"], true);
-        let args = installer["args"].as_array().unwrap();
-        let expected_flag = if mode == "success-msi" {
-            "/i"
+        if mode == "success-exe" {
+            let installer = installer_result
+                .unwrap()
+                .expect("real ShellExecuteW installer did not start and finish");
+            let args = installer["args"].as_array().unwrap();
+            assert!(args.iter().any(|arg| arg.as_str() == Some("/UPDATE")));
+            serde_json::json!({"cleanup":cleanup,"installer":installer,"exitCode":status.code()})
         } else {
-            "/UPDATE"
-        };
-        assert!(args.iter().any(|arg| arg.as_str() == Some(expected_flag)));
-        serde_json::json!({"cleanup":cleanup,"installer":installer,"exitCode":status.code()})
+            serde_json::json!({"cleanup":cleanup,"launcher":"system-msiexec","exitCode":status.code()})
+        }
     };
     fs::write(
         case_root.join("outcome.json"),
